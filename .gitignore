@@ -1,5 +1,5 @@
 *.pyc
-
+*venv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -135,6 +135,7 @@ celerybeat.pid
 .venv
 env/
 venv/
+HW1-venv/
 ENV/
 env.bak/
 venv.bak/
