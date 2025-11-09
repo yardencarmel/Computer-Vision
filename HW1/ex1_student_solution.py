@@ -5,10 +5,14 @@ from typing import Tuple
 from random import sample
 from collections import namedtuple
 
+# REMOVE THIS! ###
+import matplotlib.image as mpimg
+from cv2 import resize, INTER_CUBIC
+#######
 
 from numpy.linalg import svd
 from scipy.interpolate import griddata
-
+import scipy.io
 
 PadStruct = namedtuple('PadStruct',
                        ['pad_up', 'pad_down', 'pad_right', 'pad_left'])
@@ -58,7 +62,8 @@ class Solution:
         # Normalize the homography (divide by h[2,2])
         if homography[2, 2] != 0:
             homography = homography / homography[2, 2]
-        
+
+        print(homography)
         return homography
 
     @staticmethod
@@ -84,9 +89,32 @@ class Solution:
         Returns:
             The forward homography of the source image to its destination.
         """
-        # return new_image
-        """INSERT YOUR CODE HERE"""
-        pass
+        # Initialize destination image
+        new_image = np.zeros(dst_image_shape, dtype=src_image.dtype)
+        src_rows, src_cols = src_image.shape[:2]
+        
+        # Iterate over all pixels in the source image
+        for y in range(src_rows):
+            for x in range(src_cols):
+                # Create homogeneous coordinates (1-indexed: x+1, y+1)
+                src_point = np.array([x + 1, y + 1, 1])
+                
+                # Transform using homography
+                dst_point_homogeneous = homography @ src_point
+                
+                # Normalize by the third coordinate
+                if dst_point_homogeneous[2] != 0:
+                    dst_point_homogeneous = dst_point_homogeneous / dst_point_homogeneous[2]
+                
+                # Extract x and y coordinates (convert back to 0-indexed)
+                dst_x = int(round(dst_point_homogeneous[0])) - 1
+                dst_y = int(round(dst_point_homogeneous[1])) - 1
+                
+                # Check if destination coordinates are within bounds
+                if 0 <= dst_x < dst_image_shape[1] and 0 <= dst_y < dst_image_shape[0]:
+                    new_image[dst_y, dst_x] = src_image[y, x]
+        
+        return new_image
 
     @staticmethod
     def compute_forward_homography_fast(
@@ -115,9 +143,57 @@ class Solution:
         Returns:
             The forward homography of the source image to its destination.
         """
-        # return new_image
-        """INSERT YOUR CODE HERE"""
-        pass
+        # Get source image dimensions
+        src_rows, src_cols = src_image.shape[:2]
+        dst_rows, dst_cols = dst_image_shape[:2]
+        
+        # (1) Create a meshgrid of columns and rows
+        src_cols_grid, src_rows_grid = np.meshgrid(
+            np.arange(1, src_cols + 1),  # 1-indexed x coordinates
+            np.arange(1, src_rows + 1)    # 1-indexed y coordinates
+        )
+        
+        # (2) Generate a matrix of size 3x(H*W) which stores the pixel locations
+        # in homogeneous coordinates
+        num_pixels = src_rows * src_cols
+        homogeneous_coords = np.zeros((3, num_pixels))
+        homogeneous_coords[0, :] = src_cols_grid.flatten()  # x coordinates
+        homogeneous_coords[1, :] = src_rows_grid.flatten()  # y coordinates
+        homogeneous_coords[2, :] = 1  # homogeneous coordinate
+        
+        # (3) Transform the source homogeneous coordinates to the target
+        # homogeneous coordinates with a simple matrix multiplication and
+        # apply the normalization
+        transformed_coords = homography @ homogeneous_coords
+        
+        # Normalize by the third coordinate (w)
+        transformed_coords = transformed_coords / transformed_coords[2, :]
+        
+        # Extract x and y coordinates
+        dst_x_coords = transformed_coords[0, :]
+        dst_y_coords = transformed_coords[1, :]
+        
+        # (4) Convert the coordinates into integer values and clip them
+        # according to the destination image size
+        # Convert to 0-indexed and round
+        dst_x_int = np.round(dst_x_coords).astype(int) - 1
+        dst_y_int = np.round(dst_y_coords).astype(int) - 1
+        
+        # Clip to valid image bounds
+        dst_x_int = np.clip(dst_x_int, 0, dst_cols - 1)
+        dst_y_int = np.clip(dst_y_int, 0, dst_rows - 1)
+        
+        # (5) Plant the pixels from the source image to the target image
+        # according to the coordinates you found
+        new_image = np.zeros(dst_image_shape, dtype=src_image.dtype)
+        
+        # Reshape source image pixels
+        src_pixels = src_image.reshape(num_pixels, -1)  # Shape: (H*W, channels)
+        
+        # Use advanced indexing to place pixels
+        new_image[dst_y_int, dst_x_int] = src_pixels
+        
+        return new_image
 
     @staticmethod
     def test_homography(homography: np.ndarray,
@@ -375,3 +451,38 @@ class Solution:
         # return np.clip(img_panorama, 0, 255).astype(np.uint8)
         """INSERT YOUR CODE HERE"""
         pass
+
+
+# DELTETE THIS!
+def your_images_loader():
+    import os
+    print(os.getcwd())
+    src_img_test = mpimg.imread(r'src.jpg')
+    dst_img_test = mpimg.imread(r'dst.jpg')
+
+    DECIMATION_FACTOR = 5.0
+    src_img_test = resize(src_img_test,
+                          dsize=(int(src_img_test.shape[1]/DECIMATION_FACTOR),
+                                 int(src_img_test.shape[0]/DECIMATION_FACTOR)),
+                          interpolation=INTER_CUBIC)
+    dst_img_test = resize(dst_img_test,
+                          dsize=(int(dst_img_test.shape[1]/DECIMATION_FACTOR),
+                                 int(dst_img_test.shape[0]/DECIMATION_FACTOR)),
+                          interpolation=INTER_CUBIC)
+
+    matches_test = scipy.io.loadmat('matches')
+
+    match_p_dst = matches_test['match_p_dst'].astype(float)
+    match_p_src = matches_test['match_p_src'].astype(float)
+
+    match_p_dst /= DECIMATION_FACTOR
+    match_p_src /= DECIMATION_FACTOR
+    return src_img_test, dst_img_test, match_p_src, match_p_dst
+
+
+#DELETE THIS !
+if __name__ == "__main__":
+    solution = Solution()
+    src_img_test, dst_img_test, match_p_src, match_p_dst = your_images_loader()
+    homography = solution.compute_homography_naive(match_p_src, match_p_dst)
+    
