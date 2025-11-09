@@ -226,9 +226,38 @@ class Solution:
             inliers). In edge case where the number of inliers is zero,
             return dist_mse = 10 ** 9.
         """
-        # return fit_percent, dist_mse
-        """INSERT YOUR CODE HERE"""
-        pass
+        # Transform source points to destination using homography
+        num_points = match_p_src.shape[1]
+        
+        # Convert source points to homogeneous coordinates (3xN)
+        src_homogeneous = np.vstack([match_p_src, np.ones((1, num_points))])
+        
+        # Transform using homography
+        dst_transformed_homogeneous = homography @ src_homogeneous
+        
+        # Normalize homogeneous coordinates
+        dst_transformed_homogeneous = dst_transformed_homogeneous / dst_transformed_homogeneous[2, :]
+        
+        # Extract 2D coordinates (x, y)
+        dst_transformed = dst_transformed_homogeneous[:2, :]
+        
+        # Calculate Euclidean distances between transformed points and actual destination points
+        distances = np.sqrt(np.sum((dst_transformed - match_p_dst) ** 2, axis=0))
+        
+        # Find inliers (points within max_err)
+        inliers_mask = distances <= max_err
+        num_inliers = np.sum(inliers_mask)
+        
+        # Calculate fit_percent (probability of inliers)
+        fit_percent = num_inliers / num_points if num_points > 0 else 0.0
+        
+        # Calculate dist_mse for inliers only
+        if num_inliers > 0:
+            dist_mse = np.mean(distances[inliers_mask] ** 2)
+        else:
+            dist_mse = 10 ** 9
+        
+        return fit_percent, dist_mse
 
     @staticmethod
     def meet_the_model_points(homography: np.ndarray,
@@ -255,9 +284,32 @@ class Solution:
             The second entry is the matching points form the destination
             image (shape 2xD; D as above).
         """
-        # return mp_src_meets_model, mp_dst_meets_model
-        """INSERT YOUR CODE HERE"""
-        pass
+        # Transform source points to destination using homography
+        num_points = match_p_src.shape[1]
+        
+        # Convert source points to homogeneous coordinates (3xN)
+        src_homogeneous = np.vstack([match_p_src, np.ones((1, num_points))])
+        
+        # Transform using homography
+        dst_transformed_homogeneous = homography @ src_homogeneous
+        
+        # Normalize homogeneous coordinates
+        dst_transformed_homogeneous = dst_transformed_homogeneous / dst_transformed_homogeneous[2, :]
+        
+        # Extract 2D coordinates (x, y)
+        dst_transformed = dst_transformed_homogeneous[:2, :]
+        
+        # Calculate Euclidean distances between transformed points and actual destination points
+        distances = np.sqrt(np.sum((dst_transformed - match_p_dst) ** 2, axis=0))
+        
+        # Find inliers (points within max_err)
+        inliers_mask = distances <= max_err
+        
+        # Extract inlier points from both source and destination
+        mp_src_meets_model = match_p_src[:, inliers_mask]
+        mp_dst_meets_model = match_p_dst[:, inliers_mask]
+        
+        return mp_src_meets_model, mp_dst_meets_model
 
     def compute_homography(self,
                            match_p_src: np.ndarray,
@@ -277,21 +329,66 @@ class Solution:
         Returns:
             homography: Projective transformation matrix from src to dst.
         """
-        # # use class notations:
-        # w = inliers_percent
-        # # t = max_err
-        # # p = parameter determining the probability of the algorithm to
-        # # succeed
-        # p = 0.99
-        # # the minimal probability of points which meets with the model
-        # d = 0.5
-        # # number of points sufficient to compute the model
-        # n = 4
-        # # number of RANSAC iterations (+1 to avoid the case where w=1)
-        # k = int(np.ceil(np.log(1 - p) / np.log(1 - w ** n))) + 1
-        # return homography
-        """INSERT YOUR CODE HERE"""
-        pass
+        # use class notations:
+        w = inliers_percent
+        # t = max_err
+        # p = parameter determining the probability of the algorithm to succeed
+        p = 0.99
+        # the minimal probability of points which meets with the model
+        d = 0.5
+        # number of points sufficient to compute the model
+        n = 4
+        # number of RANSAC iterations (+1 to avoid the case where w=1)
+        k = int(np.ceil(np.log(1 - p) / np.log(1 - w ** n))) + 1
+        
+        num_points = match_p_src.shape[1]
+        best_homography = None
+        best_inlier_count = 0
+        
+        # RANSAC iterations
+        for iteration in range(k):
+            # Randomly sample n points (minimum needed for homography)
+            if num_points < n:
+                # Not enough points, use all points
+                sample_indices = np.arange(num_points)
+            else:
+                sample_indices = np.array(sample(range(num_points), n))
+            
+            # Extract sampled points
+            sample_src = match_p_src[:, sample_indices]
+            sample_dst = match_p_dst[:, sample_indices]
+            
+            # Compute homography from sampled points
+            try:
+                candidate_homography = self.compute_homography_naive(sample_src, sample_dst)
+                
+                # Test the homography on all points
+                mp_src_inliers, mp_dst_inliers = self.meet_the_model_points(
+                    candidate_homography, match_p_src, match_p_dst, max_err
+                )
+                
+                # Count inliers
+                num_inliers = mp_src_inliers.shape[1]
+                
+                # Update best homography if this one has more inliers
+                if num_inliers > best_inlier_count:
+                    best_inlier_count = num_inliers
+                    best_homography = candidate_homography
+                    
+                    # If we have enough inliers (d * total points), recompute with all inliers
+                    if num_inliers >= d * num_points:
+                        # Recompute homography using all inliers for better accuracy
+                        best_homography = self.compute_homography_naive(mp_src_inliers, mp_dst_inliers)
+            except:
+                # If homography computation fails, continue to next iteration
+                continue
+        
+        # If no good homography found, use the best one we have
+        if best_homography is None:
+            # Fallback: use all points
+            best_homography = self.compute_homography_naive(match_p_src, match_p_dst)
+        
+        return best_homography
 
     @staticmethod
     def compute_backward_mapping(
