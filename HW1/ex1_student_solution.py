@@ -5,10 +5,14 @@ from typing import Tuple
 from random import sample
 from collections import namedtuple
 
+# REMOVE THIS! ###
+import matplotlib.image as mpimg
+from cv2 import resize, INTER_CUBIC
+#######
 
 from numpy.linalg import svd
 from scipy.interpolate import griddata
-
+import scipy.io
 
 PadStruct = namedtuple('PadStruct',
                        ['pad_up', 'pad_down', 'pad_right', 'pad_left'])
@@ -58,7 +62,8 @@ class Solution:
         # Normalize the homography (divide by h[2,2])
         if homography[2, 2] != 0:
             homography = homography / homography[2, 2]
-        
+
+        print(homography)
         return homography
 
     @staticmethod
@@ -375,3 +380,38 @@ class Solution:
         # return np.clip(img_panorama, 0, 255).astype(np.uint8)
         """INSERT YOUR CODE HERE"""
         pass
+
+
+# DELTETE THIS!
+def your_images_loader():
+    import os
+    print(os.getcwd())
+    src_img_test = mpimg.imread(r'src.jpg')
+    dst_img_test = mpimg.imread(r'dst.jpg')
+
+    DECIMATION_FACTOR = 5.0
+    src_img_test = resize(src_img_test,
+                          dsize=(int(src_img_test.shape[1]/DECIMATION_FACTOR),
+                                 int(src_img_test.shape[0]/DECIMATION_FACTOR)),
+                          interpolation=INTER_CUBIC)
+    dst_img_test = resize(dst_img_test,
+                          dsize=(int(dst_img_test.shape[1]/DECIMATION_FACTOR),
+                                 int(dst_img_test.shape[0]/DECIMATION_FACTOR)),
+                          interpolation=INTER_CUBIC)
+
+    matches_test = scipy.io.loadmat('matches')
+
+    match_p_dst = matches_test['match_p_dst'].astype(float)
+    match_p_src = matches_test['match_p_src'].astype(float)
+
+    match_p_dst /= DECIMATION_FACTOR
+    match_p_src /= DECIMATION_FACTOR
+    return src_img_test, dst_img_test, match_p_src, match_p_dst
+
+
+#DELETE THIS !
+if __name__ == "__main__":
+    solution = Solution()
+    src_img_test, dst_img_test, match_p_src, match_p_dst = your_images_loader()
+    homography = solution.compute_homography_naive(match_p_src, match_p_dst)
+    
