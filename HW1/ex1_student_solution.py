@@ -91,28 +91,32 @@ class Solution:
         """
         # Initialize destination image
         new_image = np.zeros(dst_image_shape, dtype=src_image.dtype)
-        src_rows, src_cols = src_image.shape[:2]
         
-        # Iterate over all pixels in the source image
-        for y in range(src_rows):
-            for x in range(src_cols):
-                # Create homogeneous coordinates (1-indexed: x+1, y+1)
-                src_point = np.array([x + 1, y + 1, 1])
+        # Get source image dimensions
+        src_height, src_width = src_image.shape[0], src_image.shape[1]
+        
+        # Iterate over all pixels in source image
+        for y_src in range(src_height):
+            for x_src in range(src_width):
+                # Create homogeneous coordinates for source pixel
+                # Note: x is column, y is row (1-indexed in image coordinates, but we use 0-indexed)
+                src_point = np.array([x_src + 1, y_src + 1, 1])
                 
                 # Transform using homography
                 dst_point_homogeneous = homography @ src_point
                 
-                # Normalize by the third coordinate
+                # Normalize homogeneous coordinates
                 if dst_point_homogeneous[2] != 0:
                     dst_point_homogeneous = dst_point_homogeneous / dst_point_homogeneous[2]
                 
-                # Extract x and y coordinates (convert back to 0-indexed)
-                dst_x = int(round(dst_point_homogeneous[0])) - 1
-                dst_y = int(round(dst_point_homogeneous[1])) - 1
+                # Extract x and y coordinates (convert to 0-indexed)
+                x_dst = int(round(dst_point_homogeneous[0])) - 1
+                y_dst = int(round(dst_point_homogeneous[1])) - 1
                 
                 # Check if destination coordinates are within bounds
-                if 0 <= dst_x < dst_image_shape[1] and 0 <= dst_y < dst_image_shape[0]:
-                    new_image[dst_y, dst_x] = src_image[y, x]
+                if 0 <= x_dst < dst_image_shape[1] and 0 <= y_dst < dst_image_shape[0]:
+                    # Place pixel value from source to destination
+                    new_image[y_dst, x_dst] = src_image[y_src, x_src]
         
         return new_image
 
@@ -143,16 +147,18 @@ class Solution:
         Returns:
             The forward homography of the source image to its destination.
         """
+        # return new_image
+        """INSERT YOUR CODE HERE"""
         # Get source image dimensions
         src_rows, src_cols = src_image.shape[:2]
         dst_rows, dst_cols = dst_image_shape[:2]
-        
+
         # (1) Create a meshgrid of columns and rows
         src_cols_grid, src_rows_grid = np.meshgrid(
             np.arange(1, src_cols + 1),  # 1-indexed x coordinates
             np.arange(1, src_rows + 1)    # 1-indexed y coordinates
         )
-        
+
         # (2) Generate a matrix of size 3x(H*W) which stores the pixel locations
         # in homogeneous coordinates
         num_pixels = src_rows * src_cols
@@ -160,39 +166,39 @@ class Solution:
         homogeneous_coords[0, :] = src_cols_grid.flatten()  # x coordinates
         homogeneous_coords[1, :] = src_rows_grid.flatten()  # y coordinates
         homogeneous_coords[2, :] = 1  # homogeneous coordinate
-        
+
         # (3) Transform the source homogeneous coordinates to the target
         # homogeneous coordinates with a simple matrix multiplication and
         # apply the normalization
         transformed_coords = homography @ homogeneous_coords
-        
+
         # Normalize by the third coordinate (w)
         transformed_coords = transformed_coords / transformed_coords[2, :]
-        
+
         # Extract x and y coordinates
         dst_x_coords = transformed_coords[0, :]
         dst_y_coords = transformed_coords[1, :]
-        
+
         # (4) Convert the coordinates into integer values and clip them
         # according to the destination image size
         # Convert to 0-indexed and round
         dst_x_int = np.round(dst_x_coords).astype(int) - 1
         dst_y_int = np.round(dst_y_coords).astype(int) - 1
-        
+
         # Clip to valid image bounds
         dst_x_int = np.clip(dst_x_int, 0, dst_cols - 1)
         dst_y_int = np.clip(dst_y_int, 0, dst_rows - 1)
-        
+
         # (5) Plant the pixels from the source image to the target image
         # according to the coordinates you found
         new_image = np.zeros(dst_image_shape, dtype=src_image.dtype)
-        
+
         # Reshape source image pixels
         src_pixels = src_image.reshape(num_pixels, -1)  # Shape: (H*W, channels)
-        
+
         # Use advanced indexing to place pixels
         new_image[dst_y_int, dst_x_int] = src_pixels
-        
+
         return new_image
 
     @staticmethod
