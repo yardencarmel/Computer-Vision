@@ -5,14 +5,9 @@ from typing import Tuple
 from random import sample
 from collections import namedtuple
 
-# REMOVE THIS! ###
-import matplotlib.image as mpimg
-from cv2 import resize, INTER_CUBIC
-#######
 
 from numpy.linalg import svd
 from scipy.interpolate import griddata
-import scipy.io
 
 PadStruct = namedtuple('PadStruct',
                        ['pad_up', 'pad_down', 'pad_right', 'pad_left'])
@@ -63,7 +58,6 @@ class Solution:
         if homography[2, 2] != 0:
             homography = homography / homography[2, 2]
 
-        print(homography)
         return homography
 
     @staticmethod
@@ -91,28 +85,32 @@ class Solution:
         """
         # Initialize destination image
         new_image = np.zeros(dst_image_shape, dtype=src_image.dtype)
-        src_rows, src_cols = src_image.shape[:2]
         
-        # Iterate over all pixels in the source image
-        for y in range(src_rows):
-            for x in range(src_cols):
-                # Create homogeneous coordinates (1-indexed: x+1, y+1)
-                src_point = np.array([x + 1, y + 1, 1])
+        # Get source image dimensions
+        src_height, src_width = src_image.shape[0], src_image.shape[1]
+        
+        # Iterate over all pixels in source image
+        for y_src in range(src_height):
+            for x_src in range(src_width):
+                # Create homogeneous coordinates for source pixel
+                # Note: x is column, y is row (1-indexed in image coordinates, but we use 0-indexed)
+                src_point = np.array([x_src + 1, y_src + 1, 1])
                 
                 # Transform using homography
                 dst_point_homogeneous = homography @ src_point
                 
-                # Normalize by the third coordinate
+                # Normalize homogeneous coordinates
                 if dst_point_homogeneous[2] != 0:
                     dst_point_homogeneous = dst_point_homogeneous / dst_point_homogeneous[2]
                 
-                # Extract x and y coordinates (convert back to 0-indexed)
-                dst_x = int(round(dst_point_homogeneous[0])) - 1
-                dst_y = int(round(dst_point_homogeneous[1])) - 1
+                # Extract x and y coordinates (convert to 0-indexed)
+                x_dst = int(round(dst_point_homogeneous[0])) - 1
+                y_dst = int(round(dst_point_homogeneous[1])) - 1
                 
                 # Check if destination coordinates are within bounds
-                if 0 <= dst_x < dst_image_shape[1] and 0 <= dst_y < dst_image_shape[0]:
-                    new_image[dst_y, dst_x] = src_image[y, x]
+                if 0 <= x_dst < dst_image_shape[1] and 0 <= y_dst < dst_image_shape[0]:
+                    # Place pixel value from source to destination
+                    new_image[y_dst, x_dst] = src_image[y_src, x_src]
         
         return new_image
 
@@ -143,16 +141,17 @@ class Solution:
         Returns:
             The forward homography of the source image to its destination.
         """
+
         # Get source image dimensions
         src_rows, src_cols = src_image.shape[:2]
         dst_rows, dst_cols = dst_image_shape[:2]
-        
+
         # (1) Create a meshgrid of columns and rows
         src_cols_grid, src_rows_grid = np.meshgrid(
             np.arange(1, src_cols + 1),  # 1-indexed x coordinates
             np.arange(1, src_rows + 1)    # 1-indexed y coordinates
         )
-        
+
         # (2) Generate a matrix of size 3x(H*W) which stores the pixel locations
         # in homogeneous coordinates
         num_pixels = src_rows * src_cols
@@ -160,39 +159,39 @@ class Solution:
         homogeneous_coords[0, :] = src_cols_grid.flatten()  # x coordinates
         homogeneous_coords[1, :] = src_rows_grid.flatten()  # y coordinates
         homogeneous_coords[2, :] = 1  # homogeneous coordinate
-        
+
         # (3) Transform the source homogeneous coordinates to the target
         # homogeneous coordinates with a simple matrix multiplication and
         # apply the normalization
         transformed_coords = homography @ homogeneous_coords
-        
+
         # Normalize by the third coordinate (w)
         transformed_coords = transformed_coords / transformed_coords[2, :]
-        
+
         # Extract x and y coordinates
         dst_x_coords = transformed_coords[0, :]
         dst_y_coords = transformed_coords[1, :]
-        
+
         # (4) Convert the coordinates into integer values and clip them
         # according to the destination image size
         # Convert to 0-indexed and round
         dst_x_int = np.round(dst_x_coords).astype(int) - 1
         dst_y_int = np.round(dst_y_coords).astype(int) - 1
-        
+
         # Clip to valid image bounds
         dst_x_int = np.clip(dst_x_int, 0, dst_cols - 1)
         dst_y_int = np.clip(dst_y_int, 0, dst_rows - 1)
-        
+
         # (5) Plant the pixels from the source image to the target image
         # according to the coordinates you found
         new_image = np.zeros(dst_image_shape, dtype=src_image.dtype)
-        
+
         # Reshape source image pixels
         src_pixels = src_image.reshape(num_pixels, -1)  # Shape: (H*W, channels)
-        
+
         # Use advanced indexing to place pixels
         new_image[dst_y_int, dst_x_int] = src_pixels
-        
+
         return new_image
 
     @staticmethod
@@ -220,9 +219,39 @@ class Solution:
             inliers). In edge case where the number of inliers is zero,
             return dist_mse = 10 ** 9.
         """
-        # return fit_percent, dist_mse
-        """INSERT YOUR CODE HERE"""
-        pass
+
+        # Transform source points to destination using homography
+        num_points = match_p_src.shape[1]
+        
+        # Convert source points to homogeneous coordinates (3xN)
+        src_homogeneous = np.vstack([match_p_src, np.ones((1, num_points))])
+        
+        # Transform using homography
+        dst_transformed_homogeneous = homography @ src_homogeneous
+        
+        # Normalize homogeneous coordinates
+        dst_transformed_homogeneous = dst_transformed_homogeneous / dst_transformed_homogeneous[2, :]
+        
+        # Extract 2D coordinates (x, y)
+        dst_transformed = dst_transformed_homogeneous[:2, :]
+        
+        # Calculate Euclidean distances between transformed points and actual destination points
+        distances = np.sqrt(np.sum((dst_transformed - match_p_dst) ** 2, axis=0))
+        
+        # Find inliers (points within max_err)
+        inliers_mask = distances <= max_err
+        num_inliers = np.sum(inliers_mask)
+        
+        # Calculate fit_percent (probability of inliers)
+        fit_percent = num_inliers / num_points if num_points > 0 else 0.0
+        
+        # Calculate dist_mse for inliers only
+        if num_inliers > 0:
+            dist_mse = np.mean(distances[inliers_mask] ** 2)
+        else:
+            dist_mse = 10 ** 9
+        
+        return fit_percent, dist_mse
 
     @staticmethod
     def meet_the_model_points(homography: np.ndarray,
@@ -249,9 +278,33 @@ class Solution:
             The second entry is the matching points form the destination
             image (shape 2xD; D as above).
         """
-        # return mp_src_meets_model, mp_dst_meets_model
-        """INSERT YOUR CODE HERE"""
-        pass
+
+        # Transform source points to destination using homography
+        num_points = match_p_src.shape[1]
+        
+        # Convert source points to homogeneous coordinates (3xN)
+        src_homogeneous = np.vstack([match_p_src, np.ones((1, num_points))])
+        
+        # Transform using homography
+        dst_transformed_homogeneous = homography @ src_homogeneous
+        
+        # Normalize homogeneous coordinates
+        dst_transformed_homogeneous = dst_transformed_homogeneous / dst_transformed_homogeneous[2, :]
+        
+        # Extract 2D coordinates (x, y)
+        dst_transformed = dst_transformed_homogeneous[:2, :]
+        
+        # Calculate Euclidean distances between transformed points and actual destination points
+        distances = np.sqrt(np.sum((dst_transformed - match_p_dst) ** 2, axis=0))
+        
+        # Find inliers (points within max_err)
+        inliers_mask = distances <= max_err
+        
+        # Extract inlier points from both source and destination
+        mp_src_meets_model = match_p_src[:, inliers_mask]
+        mp_dst_meets_model = match_p_dst[:, inliers_mask]
+        
+        return mp_src_meets_model, mp_dst_meets_model
 
     def compute_homography(self,
                            match_p_src: np.ndarray,
@@ -271,21 +324,68 @@ class Solution:
         Returns:
             homography: Projective transformation matrix from src to dst.
         """
-        # # use class notations:
-        # w = inliers_percent
-        # # t = max_err
-        # # p = parameter determining the probability of the algorithm to
-        # # succeed
-        # p = 0.99
-        # # the minimal probability of points which meets with the model
-        # d = 0.5
-        # # number of points sufficient to compute the model
-        # n = 4
-        # # number of RANSAC iterations (+1 to avoid the case where w=1)
-        # k = int(np.ceil(np.log(1 - p) / np.log(1 - w ** n))) + 1
-        # return homography
-        """INSERT YOUR CODE HERE"""
-        pass
+
+        # use class notations:
+        w = inliers_percent
+        # t = max_err
+        # p = parameter determining the probability of the algorithm to succeed
+        p = 0.99
+        # the minimal probability of points which meets with the model
+        d = 0.5
+        # number of points sufficient to compute the model
+        n = 4
+        # number of RANSAC iterations (+1 to avoid the case where w=1)
+        k = int(np.ceil(np.log(1 - p) / np.log(1 - w ** n))) + 1
+        
+        num_points = match_p_src.shape[1]
+        best_homography = None
+        best_inlier_count = 0
+        
+        # RANSAC iterations
+        for iteration in range(k):
+            # Randomly sample n points (minimum needed for homography)
+            if num_points < n:
+                # Not enough points, use all points
+                sample_indices = np.arange(num_points)
+            else:
+                sample_indices = np.array(sample(range(num_points), n))
+            
+            # Extract sampled points
+            sample_src = match_p_src[:, sample_indices]
+            sample_dst = match_p_dst[:, sample_indices]
+            
+            # Compute homography from sampled points
+            try:
+                candidate_homography = self.compute_homography_naive(sample_src, sample_dst)
+                
+                # Test the homography on all points
+                mp_src_inliers, mp_dst_inliers = self.meet_the_model_points(
+                    candidate_homography, match_p_src, match_p_dst, max_err
+                )
+                
+                # Count inliers
+                num_inliers = mp_src_inliers.shape[1]
+                
+                # Update best homography if this one has more inliers
+                if num_inliers > best_inlier_count:
+                    best_inlier_count = num_inliers
+                    best_homography = candidate_homography
+                    
+                    # If we have enough inliers (d * total points), recompute with all inliers
+                    if num_inliers >= d * num_points:
+                        # Recompute homography using all inliers for better accuracy
+                        best_homography = self.compute_homography_naive(mp_src_inliers, mp_dst_inliers)
+                    
+            except:
+                # If homography computation fails, continue to next iteration
+                continue
+        
+        # If no good homography found, use the best one we have
+        if best_homography is None:
+            # Fallback: use all points
+            best_homography = self.compute_homography_naive(match_p_src, match_p_dst)
+        
+        return best_homography
 
     @staticmethod
     def compute_backward_mapping(
@@ -313,9 +413,70 @@ class Solution:
             The source image backward warped to the destination coordinates.
         """
 
-        # return backward_warp
-        """INSERT YOUR CODE HERE"""
-        pass
+        # Get dimensions
+        dst_rows, dst_cols = dst_image_shape[:2]
+        src_rows, src_cols = src_image.shape[:2]
+        
+        # (1) Create a mesh-grid of columns and rows of the destination image
+        dst_cols_grid, dst_rows_grid = np.meshgrid(
+            np.arange(1, dst_cols + 1),  # 1-indexed x coordinates
+            np.arange(1, dst_rows + 1)    # 1-indexed y coordinates
+        )
+        
+        # (2) Create a set of homogeneous coordinates for the destination image
+        num_dst_pixels = dst_rows * dst_cols
+        dst_homogeneous = np.zeros((3, num_dst_pixels))
+        dst_homogeneous[0, :] = dst_cols_grid.flatten()  # x coordinates
+        dst_homogeneous[1, :] = dst_rows_grid.flatten()  # y coordinates
+        dst_homogeneous[2, :] = 1  # homogeneous coordinate
+        
+        # (3) Compute the corresponding coordinates in the source image using
+        # the backward projective homography
+        src_transformed_homogeneous = backward_projective_homography @ dst_homogeneous
+        
+        # Normalize homogeneous coordinates
+        src_transformed_homogeneous = src_transformed_homogeneous / src_transformed_homogeneous[2, :]
+        
+        # Extract x and y coordinates in source image space
+        src_x_coords = src_transformed_homogeneous[0, :]
+        src_y_coords = src_transformed_homogeneous[1, :]
+        
+        # (4) Create the mesh-grid of source image coordinates
+        src_cols_grid, src_rows_grid = np.meshgrid(
+            np.arange(1, src_cols + 1),  # 1-indexed x coordinates
+            np.arange(1, src_rows + 1)    # 1-indexed y coordinates
+        )
+        
+        # Flatten source coordinates for griddata
+        src_points = np.column_stack([
+            src_cols_grid.flatten(),  # x coordinates
+            src_rows_grid.flatten()   # y coordinates
+        ])
+        
+        # Points to interpolate at (transformed coordinates)
+        xi = np.column_stack([src_x_coords, src_y_coords])
+        
+        # (5) For each color channel (RGB): Use scipy's interpolation.griddata
+        # with an appropriate configuration to compute the bi-cubic
+        # interpolation of the projected coordinates
+        backward_warp = np.zeros(dst_image_shape, dtype=src_image.dtype)
+        
+        # Get source image pixel values (flattened)
+        src_values = src_image.reshape(src_rows * src_cols, -1)  # Shape: (H*W, channels)
+        
+        # Interpolate for each channel
+        for channel in range(src_image.shape[2]):    
+            # Use cubic interpolation (bi-cubic)
+            interpolated = griddata(
+                src_points,           # Known points (source image coordinates)
+                src_values[:, channel],  # Known values (source image pixel values)
+                xi,                   # Points to interpolate at (transformed coordinates)
+                method='cubic',       # Bi-cubic interpolation
+                fill_value=0          # Fill value for points outside the source image
+            )
+            backward_warp[:, :, channel] = interpolated.reshape(dst_rows, dst_cols)
+            
+        return backward_warp
 
     @staticmethod
     def find_panorama_shape(src_image: np.ndarray,
@@ -405,9 +566,31 @@ class Solution:
             A new homography which includes the backward homography and the
             translation.
         """
-        # return final_homography
-        """INSERT YOUR CODE HERE"""
-        pass
+
+        # (1) Build the translation matrix from the pads
+        # We need to convert panorama coordinates to destination image coordinates
+        # Panorama coordinates have padding, so we subtract the padding to get
+        # destination image coordinates. Translation by (-pad_left, -pad_up):
+        # [1  0  -pad_left]
+        # [0  1  -pad_up  ]
+        # [0  0  1        ]
+        translation_matrix = np.array([
+            [1, 0, -pad_left],
+            [0, 1, -pad_up],
+            [0, 0, 1]
+        ], dtype=np.float64)
+        
+        # (2) Compose the backward homography and the translation matrix together
+        # We apply translation first (to convert panorama coords to dst coords),
+        # then backward homography (to convert dst coords to src coords):
+        # final_homography = backward_homography @ translation_matrix
+        final_homography = backward_homography @ translation_matrix
+        
+        # (3) Scale the homography as learnt in class (normalize by h[2,2])
+        if final_homography[2, 2] != 0:
+            final_homography = final_homography / final_homography[2, 2]
+        
+        return final_homography
 
     def panorama(self,
                  src_image: np.ndarray,
@@ -448,41 +631,57 @@ class Solution:
             A panorama image.
 
         """
-        # return np.clip(img_panorama, 0, 255).astype(np.uint8)
-        """INSERT YOUR CODE HERE"""
-        pass
-
-
-# DELTETE THIS!
-def your_images_loader():
-    import os
-    print(os.getcwd())
-    src_img_test = mpimg.imread(r'src.jpg')
-    dst_img_test = mpimg.imread(r'dst.jpg')
-
-    DECIMATION_FACTOR = 5.0
-    src_img_test = resize(src_img_test,
-                          dsize=(int(src_img_test.shape[1]/DECIMATION_FACTOR),
-                                 int(src_img_test.shape[0]/DECIMATION_FACTOR)),
-                          interpolation=INTER_CUBIC)
-    dst_img_test = resize(dst_img_test,
-                          dsize=(int(dst_img_test.shape[1]/DECIMATION_FACTOR),
-                                 int(dst_img_test.shape[0]/DECIMATION_FACTOR)),
-                          interpolation=INTER_CUBIC)
-
-    matches_test = scipy.io.loadmat('matches')
-
-    match_p_dst = matches_test['match_p_dst'].astype(float)
-    match_p_src = matches_test['match_p_src'].astype(float)
-
-    match_p_dst /= DECIMATION_FACTOR
-    match_p_src /= DECIMATION_FACTOR
-    return src_img_test, dst_img_test, match_p_src, match_p_dst
-
-
-#DELETE THIS !
-if __name__ == "__main__":
-    solution = Solution()
-    src_img_test, dst_img_test, match_p_src, match_p_dst = your_images_loader()
-    homography = solution.compute_homography_naive(match_p_src, match_p_dst)
-    
+        
+        # (1) Compute the forward homography and the panorama shape
+        forward_homography = self.compute_homography(
+            match_p_src, match_p_dst, inliers_percent, max_err
+        )
+        
+        panorama_rows_num, panorama_cols_num, pad_struct = self.find_panorama_shape(
+            src_image, dst_image, forward_homography
+        )
+        
+        # (2) Compute the backward homography (inverse of forward homography)
+        backward_homography = np.linalg.inv(forward_homography)
+        # Normalize the backward homography
+        if backward_homography[2, 2] != 0:
+            backward_homography = backward_homography / backward_homography[2, 2]
+        
+        # (3) Add the appropriate translation to the homography so that the
+        # source image will plant in place
+        backward_homography_with_translation = self.add_translation_to_backward_homography(
+            backward_homography, pad_struct.pad_left, pad_struct.pad_up
+        )
+        
+        # (4) Compute the backward warping with the appropriate translation
+        panorama_shape = (panorama_rows_num, panorama_cols_num, 3)
+        backward_warped = self.compute_backward_mapping(
+            backward_homography_with_translation, src_image, panorama_shape
+        )
+        
+        # (5) Create an empty panorama image and plant there the destination image
+        # Start with backward warped image (covers entire panorama)
+        img_panorama = backward_warped.copy()
+        
+        # Place destination image at the correct position (with padding offset)
+        # This will overwrite the backward warped image in the overlapping region
+        dst_start_row = pad_struct.pad_up
+        dst_end_row = dst_start_row + dst_image.shape[0]
+        dst_start_col = pad_struct.pad_left
+        dst_end_col = dst_start_col + dst_image.shape[1]
+        
+        img_panorama[dst_start_row:dst_end_row, dst_start_col:dst_end_col, :] = dst_image
+        
+        # (6) Place the backward warped image in the indices where the panorama
+        # image is zero (i.e., where there's no destination image)
+        # Actually, we already did this by starting with backward_warped and then
+        # placing dst_image on top. But to be safe, let's also fill any remaining zeros
+        # with backward warped values
+        zero_mask = np.sum(img_panorama, axis=2) == 0
+        num_zero_pixels = np.sum(zero_mask)
+        if num_zero_pixels > 0:
+            for channel in range(3):
+                img_panorama[:, :, channel][zero_mask] = backward_warped[:, :, channel][zero_mask]
+        
+        # (7) Don't forget to clip the values of the image to [0, 255]
+        return np.clip(img_panorama, 0, 255).astype(np.uint8)
