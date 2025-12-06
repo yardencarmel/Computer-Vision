@@ -14,8 +14,8 @@ DISPARITY_RANGE = 20
 ##########################################################
 # Don't forget to fill in your IDs!!!
 # students' IDs:
-ID1 = '123456789'
-ID2 = '987654321'
+ID1 = '315152629'
+ID2 = '208520288'
 ##########################################################
 
 
@@ -45,8 +45,8 @@ def load_data(is_your_data=False):
     assets_dir = os.path.join(base_dir, 'assets')
     
     if is_your_data:
-        left_path = os.path.join(assets_dir, 'image_left.png')
-        right_path = os.path.join(assets_dir, 'image_right.png')
+        left_path = os.path.join(assets_dir, 'my_left.jpg')
+        right_path = os.path.join(assets_dir, 'my_right.jpg')
     else:
         left_path = os.path.join(assets_dir, 'image_left.png')
         right_path = os.path.join(assets_dir, 'image_right.png')
