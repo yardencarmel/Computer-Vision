@@ -57,8 +57,24 @@ def get_soft_scores_and_true_labels(dataset, model):
         inference result on the images in the dataset (data in index = 1).
         gt_labels: an iterable holding the samples' ground truth labels.
     """
-    """INSERT YOUR CODE HERE, overrun return."""
-    return torch.rand(100, ), torch.rand(100, ), torch.randint(0, 2, (100, ))
+    all_first_soft_scores = []
+    all_second_soft_scores = []
+    gt_labels = []
+
+    model.eval()
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+
+    with torch.no_grad():
+        for inputs, targets in dataloader:
+            inputs = inputs.to(device)
+            outputs = model(inputs)
+            scores = torch.nn.functional.softmax(outputs, dim=1)
+            
+            all_first_soft_scores.extend(scores[:, 0].cpu().numpy())
+            all_second_soft_scores.extend(scores[:, 1].cpu().numpy())
+            gt_labels.extend(targets.numpy())
+
+    return all_first_soft_scores, all_second_soft_scores, gt_labels
 
 
 def plot_roc_curve(roc_curve_figure,
@@ -149,6 +165,12 @@ def main():
     test_dataset = load_dataset(dataset_name=args.dataset, dataset_part='test')
     all_first_soft_scores, all_second_soft_scores, gt_labels = \
         get_soft_scores_and_true_labels(test_dataset, model)
+    
+    # Question 9: Proportion of fake images
+    num_fake = sum(gt_labels)
+    num_real = len(gt_labels) - num_fake
+    print(f"Proportion of fake/synthetic images (label 1) to real images (label 0) in {args.dataset}: {num_fake/num_real:.4f} "
+          f"(Fake: {num_fake}, Real: {num_real})")
 
     # plot the roc curves
     roc_curve_figure = plt.figure()

@@ -7,6 +7,7 @@ from torchvision import transforms
 
 from faces_dataset import FacesDataset
 from models import SimpleNet, get_xception_based_model
+from bonus_model import BonusNet
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -43,7 +44,7 @@ def load_dataset(dataset_name: str, dataset_part: str) -> \
                  'val': TRANSFORM_TEST,
                  'test': TRANSFORM_TEST}[dataset_part]
     dataset = FacesDataset(
-        root_path=os.path.join('..',
+        root_path=os.path.join(
                                'Assignment4_datasets',
                                dataset_name,
                                dataset_part),
@@ -63,6 +64,7 @@ def load_model(model_name: str) -> nn.Module:
     models = {
         'SimpleNet': SimpleNet(),
         'XceptionBased': get_xception_based_model(),
+        'BonusNet': BonusNet(),
     }
 
     if model_name not in models:

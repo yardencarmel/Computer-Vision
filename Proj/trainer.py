@@ -60,7 +60,32 @@ class Trainer:
         print_every = int(len(train_dataloader) / 10)
 
         for batch_idx, (inputs, targets) in enumerate(train_dataloader):
-            """INSERT YOUR CODE HERE."""
+            inputs, targets = inputs.to(device), targets.to(device)
+            
+            # 1. zero the gradients
+            self.optimizer.zero_grad()
+            
+            # 2. compute a forward pass
+            outputs = self.model(inputs)
+            
+            # 3. compute the loss w.r.t to the criterion
+            loss = self.criterion(outputs, targets)
+            
+            # 4. compute a backward pass
+            loss.backward()
+            
+            # 5. step optimizer
+            self.optimizer.step()
+            
+            # 6. update the average loss and accuracy
+            total_loss += loss.item()
+            nof_samples += targets.size(0)
+            _, predicted = torch.max(outputs.data, 1)
+            correct_labeled_samples += (predicted == targets).sum().item()
+            
+            avg_loss = total_loss / (batch_idx + 1)
+            accuracy = 100 * correct_labeled_samples / nof_samples
+
             if batch_idx % print_every == 0 or \
                     batch_idx == len(train_dataloader) - 1:
                 print(f'Epoch [{self.epoch:03d}] | Loss: {avg_loss:.3f} | '
@@ -91,12 +116,29 @@ class Trainer:
         correct_labeled_samples = 0
         print_every = max(int(len(dataloader) / 10), 1)
 
-        for batch_idx, (inputs, targets) in enumerate(dataloader):
-            """INSERT YOUR CODE HERE."""
-            if batch_idx % print_every == 0 or batch_idx == len(dataloader) - 1:
-                print(f'Epoch [{self.epoch:03d}] | Loss: {avg_loss:.3f} | '
-                      f'Acc: {accuracy:.2f}[%] '
-                      f'({correct_labeled_samples}/{nof_samples})')
+        with torch.no_grad():
+            for batch_idx, (inputs, targets) in enumerate(dataloader):
+                inputs, targets = inputs.to(device), targets.to(device)
+                
+                # 1. compute a forward pass
+                outputs = self.model(inputs)
+                
+                # 2. compute the loss w.r.t to the criterion
+                loss = self.criterion(outputs, targets)
+                
+                # 3. update the average loss and accuracy
+                total_loss += loss.item()
+                nof_samples += targets.size(0)
+                _, predicted = torch.max(outputs.data, 1)
+                correct_labeled_samples += (predicted == targets).sum().item()
+                
+                avg_loss = total_loss / (batch_idx + 1)
+                accuracy = 100 * correct_labeled_samples / nof_samples
+
+                if batch_idx % print_every == 0 or batch_idx == len(dataloader) - 1:
+                    print(f'Epoch [{self.epoch:03d}] | Loss: {avg_loss:.3f} | '
+                          f'Acc: {accuracy:.2f}[%] '
+                          f'({correct_labeled_samples}/{nof_samples})')
 
         return avg_loss, accuracy
 
