@@ -84,6 +84,8 @@ def main():
     model.load_state_dict(torch.load(args.checkpoint_path)['model'])
 
     model.eval()
+    for param in model.parameters():
+        param.requires_grad = True
     seen_labels = []
     while len(set(seen_labels)) != 2:
         visualization, true_label = get_grad_cam_visualization(test_dataset,

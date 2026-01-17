@@ -101,7 +101,7 @@ Accuracy and Loss plots for XceptionBased on Synthetic dataset:
 
 ### Question 27: Best Validation Accuracy (XceptionBased)
 *What is the test accuracy corresponding to the highest validation accuracy?*
-Max validation accuracy was 52.69% (Epoch 2). Corresponding test accuracy was 52.40%.
+Max validation accuracy was 72.08% (Epoch 2). Corresponding test accuracy was 72.71%.
 
 ### Question 28: ROC and DET Analysis (XceptionBased)
 ROC Curve:
@@ -112,7 +112,7 @@ DET Curve:
 
 ### Section 4.4: Rhetorical Questions Analysis
 *Why did we get better results than 3.4?*
-The pre-trained Xception model has learned rich feature representations from ImageNet which are transferable to other vision tasks. Even though fine-tuning was short (2 epochs) and results were only slightly better (52% vs 50%) in this specific run, theoretically, the deep architecture and pre-trained weights provide a much better starting point than a random initialization of a shallow network like SimpleNet. The added MLP head allows for non-linear adaptation of these features to the binary classification task. (Note: in this specific run, improvement was marginal, possibly requiring more training).
+After fixing normalization (matching Xception's ImageNet pre-training) and freezing the backbone weights, the model achieved ~72.7% accuracy (compared to ~50% for SimpleNet/Random). The pre-trained features provided a robust starting point. Training only the MLP head prevented the destruction of these features given the high learning rate (0.001) and short training duration (2 epochs). SimpleNet, being shallow and trained from scratch, failed to capture the subtle artifacts of GAN-generated images.
 
 ## Chapter 5: Saliency Maps and Grad-CAM
 

@@ -202,6 +202,8 @@ class Trainer:
                          f"{logging_parameters.model_name}_" \
                          f"{logging_parameters.optimizer_name}.pt"
         checkpoint_filename = os.path.join(CHECKPOINT_DIR, model_filename)
+        if not os.path.exists(CHECKPOINT_DIR):
+            os.makedirs(CHECKPOINT_DIR)
         for self.epoch in range(1, epochs + 1):
             print(f'Epoch {self.epoch}/{epochs}')
 

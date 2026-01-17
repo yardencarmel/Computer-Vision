@@ -46,6 +46,8 @@ def main():
         synthetic_dataset_train[fake_image_idx][0]).permute(1, 2, 0))
     plt.title('Synthetic images dataset fake image')
     images_samples.set_size_inches((8, 8))
+    if not os.path.exists(FIGURES_DIR):
+        os.makedirs(FIGURES_DIR)
     images_samples.savefig(os.path.join(FIGURES_DIR, 'datasets_samples.png'))
 
 

@@ -3,6 +3,7 @@ import os
 import argparse
 
 import torch
+import numpy as np
 import scipy.stats as sp
 import matplotlib.pyplot as plt
 
@@ -124,8 +125,15 @@ def plot_det_curve(det_curve_figure,
         roc_curve_first_score_figure: the figure with plots on it.
     """
     fpr, fnr, _ = metrics.det_curve(gt_labels, all_first_soft_scores)
+    # Clamp to avoid inf in ppf
+    fpr = np.clip(fpr, 1e-6, 1 - 1e-6)
+    fnr = np.clip(fnr, 1e-6, 1 - 1e-6)
     plt.plot(sp.norm.ppf(fpr), sp.norm.ppf(fnr))
+    
     fpr, fnr, _ = metrics.det_curve(gt_labels, all_second_soft_scores)
+    # Clamp to avoid inf in ppf
+    fpr = np.clip(fpr, 1e-6, 1 - 1e-6)
+    fnr = np.clip(fnr, 1e-6, 1 - 1e-6)
     plt.plot(sp.norm.ppf(fpr), sp.norm.ppf(fnr))
 
     plt.grid(True)
