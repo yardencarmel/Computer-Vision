@@ -186,3 +186,7 @@ cython_debug/
 reg_alon.png
 reg_bracha.png
 reg.png
+
+
+Assignment4_datasets/
+checkpoints/
